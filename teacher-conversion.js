@@ -79,7 +79,23 @@
     }
   }
 
+  function neutralizeTeacherWording(){
+    if(!document.body) return;
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    let node;
+    while((node=walker.nextNode())){
+      const t=node.nodeValue||'';
+      const n=t
+        .replaceAll('Le maître','L’enseignant')
+        .replaceAll('le maître','l’enseignant')
+        .replaceAll('Du maître','De l’enseignant')
+        .replaceAll('du maître','de l’enseignant');
+      if(n!==t) node.nodeValue=n;
+    }
+  }
+
   function patch(){
+    neutralizeTeacherWording();
     const buttons=[...document.querySelectorAll('button')];
     for(const b of buttons){
       const m=String(b.textContent||'').match(/Transformer en\s+(\d+)\s+jeton/i);
