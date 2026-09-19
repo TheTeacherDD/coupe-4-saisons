@@ -195,6 +195,33 @@
       '<div class="card" style="margin-top:18px"><h3>Transferts vers l’Académie</h3>'+trans+'</div>';
   };
 
+  async function teacherConvertCurrentHouse(btn){
+    const match=String(btn.textContent||'').match(/Transformer en\\s+(\\d+)\\s+jeton/i);
+    const shownTotal=match?Number(match[1]):0;
+    if(shownTotal<=0) return;
+    btn.disabled=true;
+    const oldText=btn.textContent;
+    btn.textContent='Transformation…';
+    try{
+      const p=period();
+      if(!p) throw new Error('Aucune période active');
+      const result=await rpc('convert_weekly_result',{
+        p_house_id:cHouse,
+        p_week_start:monday(),
+        p_period_id:p.id
+      });
+      await load();
+      render();
+      const row=Array.isArray(result)?result[0]:result;
+      const n=Number(row&&row.tokens_awarded||shownTotal);
+      t(n+' jeton'+(n>1?'s':'')+' ajouté'+(n>1?'s':'')+' au bocal de la classe.');
+    }catch(e){
+      btn.disabled=false;
+      btn.textContent=oldText;
+      t('Transformation impossible : '+String(e.message||e));
+    }
+  }
+
   bind=function(){
     baseBind();
     const preview=document.getElementById('pmPreview');
@@ -203,6 +230,17 @@
     if(close) close.addEventListener('click',closePeriod);
     const picker=document.getElementById('archivePeriod');
     if(picker) picker.addEventListener('change',e=>{archivePeriodId=e.target.value;render();});
+
+    const transform=[...document.querySelectorAll('button')].find(b=>/Transformer en\\s+\\d+\\s+jeton/i.test(b.textContent||''));
+    if(transform && transform.disabled){
+      const m=String(transform.textContent||'').match(/Transformer en\\s+(\\d+)\\s+jeton/i);
+      const n=m?Number(m[1]):0;
+      if(n>0){
+        transform.disabled=false;
+        transform.title='Transformer les points en jetons de la classe';
+        transform.addEventListener('click',()=>teacherConvertCurrentHouse(transform),{once:true});
+      }
+    }
   };
 
   loadHistory();
