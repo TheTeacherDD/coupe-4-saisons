@@ -104,10 +104,7 @@ document.getElementById('check').onclick=async()=>{
 async function closePeriodNow(){
   if(!verifiedPeriod)return;
   const phrase='SIMULER PÉRIODE '+verifiedPeriod.name;
-  const answer=prompt(
-    'SIMULATION UNIQUEMENT — aucune donnée réelle ne sera modifiée.\\n\\n'+
-    'Pour tester l’écran de fin de période, recopiez exactement :\\n'+phrase
-  );
+  const answer=prompt(`SIMULATION UNIQUEMENT — aucune donnée réelle ne sera modifiée.\n\nPour tester l’écran de fin de période, recopiez exactement :\n${phrase}`);
   if(answer!==phrase){alert('Simulation annulée.');return;}
   const oldName=verifiedPeriod.name;
   const nextName=verifiedPeriod.nextName||'suivante';
