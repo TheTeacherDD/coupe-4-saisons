@@ -195,6 +195,74 @@
       '<div class="card" style="margin-top:18px"><h3>Transferts vers l’Académie</h3>'+trans+'</div>';
   };
 
+
+  function selectedHouseId(){
+    const el=document.querySelector('.pick.active') || document.querySelector('.pick[aria-pressed="true"]');
+    const txt=String(el&&el.textContent||'').toLowerCase();
+    for(const id of ['verdelis','solor','feuillanor','givrecime']){
+      if(txt.includes(id)) return id;
+    }
+    try{
+      if(typeof cHouse!=='undefined' && cHouse) return cHouse;
+    }catch{}
+    return null;
+  }
+
+  function patchTeacherTransformButton(){
+    const candidates=[...document.querySelectorAll('button')];
+    const original=candidates.find(b=>/Transformer en\s+\d+\s+jeton/i.test(String(b.textContent||'')));
+    if(!original) return;
+
+    const m=String(original.textContent||'').match(/Transformer en\s+(\d+)\s+jeton/i);
+    const n=m?Number(m[1]):0;
+    if(n<=0 || original.dataset.c4sTeacherFixed==='1') return;
+
+    const clone=original.cloneNode(true);
+    clone.disabled=false;
+    clone.removeAttribute('disabled');
+    clone.removeAttribute('aria-disabled');
+    clone.style.pointerEvents='auto';
+    clone.style.opacity='1';
+    clone.style.cursor='pointer';
+    clone.dataset.c4sTeacherFixed='1';
+    original.replaceWith(clone);
+
+    clone.addEventListener('click',async ev=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const house=selectedHouseId();
+      if(!house){
+        t('Maison sélectionnée introuvable.');
+        return;
+      }
+      clone.disabled=true;
+      const old=clone.textContent;
+      clone.textContent='Transformation…';
+      try{
+        const p=period();
+        if(!p) throw new Error('Aucune période active');
+        const result=await rpc('convert_weekly_result',{
+          p_house_id:house,
+          p_week_start:monday(),
+          p_period_id:p.id
+        });
+        await load();
+        render();
+        const row=Array.isArray(result)?result[0]:result;
+        const qty=Number(row&&row.tokens_awarded||n);
+        t(qty+' jeton'+(qty>1?'s':'')+' ajouté'+(qty>1?'s':'')+' au bocal de la classe.');
+      }catch(e){
+        clone.disabled=false;
+        clone.textContent=old;
+        t('Transformation impossible : '+String(e.message||e));
+      }
+    },{once:true});
+  }
+
+  const transformObserver=new MutationObserver(()=>patchTeacherTransformButton());
+  transformObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','class']});
+  setTimeout(patchTeacherTransformButton,0);
+
   async function teacherConvertCurrentHouse(btn){
     const match=String(btn.textContent||'').match(/Transformer en\\s+(\\d+)\\s+jeton/i);
     const shownTotal=match?Number(match[1]):0;
