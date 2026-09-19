@@ -37,7 +37,7 @@ a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}.bra
 
 <script>
 const URL='https://dxbvklzpwjcebvkscnej.supabase.co';
-const KEY='sb_publishable_df2d134QXUsD46jUMmX60A_AdvQ0iJz';
+const KEY='sb_publishable_df2dl34QXUsD46jUMmX60A_AdvQQiJz';
 const session=()=>{try{return JSON.parse(localStorage.getItem('c4s_session')||'null')}catch{return null}};
 const headers=()=>{const s=session();return {'apikey':KEY,'Authorization':'Bearer '+(s&&s.access_token||''),'Content-Type':'application/json'}};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
