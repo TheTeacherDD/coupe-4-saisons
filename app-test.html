@@ -103,22 +103,32 @@ document.getElementById('check').onclick=async()=>{
 
 async function closePeriodNow(){
   if(!verifiedPeriod)return;
-  const phrase='CLÔTURER PÉRIODE '+verifiedPeriod.name;
-  const answer=prompt('Cette action archive réellement la période '+verifiedPeriod.name+' et active la suivante.\\n\\nAucune donnée ne sera supprimée.\\n\\nPour confirmer, recopiez exactement :\\n'+phrase);
-  if(answer!==phrase){alert('Clôture annulée.');return;}
-  const closeBtn=document.getElementById('closePeriod');
-  if(closeBtn)closeBtn.disabled=true;
-  try{
-    const data=await rpc('close_period',{p_period_id:verifiedPeriod.id});
-    const x=Array.isArray(data)?data[0]:data;
-    document.getElementById('status').className='note ok';
-    document.getElementById('status').innerHTML='<b>Période clôturée avec succès.</b> La période '+esc(x&&x.next_period_name||verifiedPeriod.nextName||'suivante')+' est maintenant active.';
-    document.getElementById('result').innerHTML='<div class="note ok"><b>Test réussi.</b><br>La période '+esc(verifiedPeriod.name)+' a été archivée. Les conversions, transferts et totaux restent conservés dans la base.</div><p style="margin-top:16px"><a class="btn secondary" href="app-stable.html">Retour au site stable</a></p>';
-    verifiedPeriod=null;
-  }catch(e){
-    if(closeBtn)closeBtn.disabled=false;
-    alert('Clôture impossible : '+e.message);
-  }
+  const phrase='SIMULER PÉRIODE '+verifiedPeriod.name;
+  const answer=prompt(
+    'SIMULATION UNIQUEMENT — aucune donnée réelle ne sera modifiée.\\n\\n'+
+    'Pour tester l’écran de fin de période, recopiez exactement :\\n'+phrase
+  );
+  if(answer!==phrase){alert('Simulation annulée.');return;}
+  const oldName=verifiedPeriod.name;
+  const nextName=verifiedPeriod.nextName||'suivante';
+  document.getElementById('status').className='note ok';
+  document.getElementById('status').innerHTML=
+    '<b>Simulation réussie.</b> Dans le vrai fonctionnement, la période '+esc(oldName)+
+    ' serait archivée et la période '+esc(nextName)+' deviendrait active.';
+  document.getElementById('result').innerHTML=
+    '<div class="note ok"><b>Aucune donnée n’a été modifiée.</b><br><br>'+
+    'La simulation confirme le scénario suivant :<br>'+
+    '• Période '+esc(oldName)+' → archivée<br>'+
+    '• Période '+esc(nextName)+' → activée<br>'+
+    '• conversions conservées<br>'+
+    '• transferts conservés<br>'+
+    '• totaux de fin de période figés dans les archives<br>'+
+    '• nouveaux totaux de période repartent de 0</div>'+
+    '<p style="margin-top:16px"><button id="redoTest" class="btn secondary">Revenir à la vérification</button> '+
+    '<a class="btn secondary" href="app-stable.html">Retour au site stable</a></p>';
+  const redo=document.getElementById('redoTest');
+  if(redo)redo.onclick=()=>location.reload();
+  verifiedPeriod=null;
 }
 </script>
 </body>
