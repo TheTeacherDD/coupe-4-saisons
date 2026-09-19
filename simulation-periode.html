@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test fin de période — Coupe des 4 Saisons</title>
+<style>
+:root{--bg:#0f0c16;--card:#21192d;--ink:#f8f1df;--muted:#c9bfd2;--gold:#ddb76a;--line:#4b3c59;--ok:#6fa57e;--bad:#c56f42}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#392515 0,transparent 35%),linear-gradient(145deg,#100e18,#171321 65%,#101520);color:var(--ink);font-family:Inter,system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:1050px;margin:auto;padding:32px 18px 60px}h1,h2,h3{font-family:Georgia,serif}.brand{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}.badge{display:inline-block;padding:7px 12px;border:1px solid var(--line);border-radius:999px;color:var(--gold)}
+.card{background:rgba(33,25,45,.96);border:1px solid var(--line);border-radius:24px;padding:24px;box-shadow:0 20px 50px #0005;margin-top:18px}
+.btn{border:1px solid var(--line);border-radius:14px;padding:13px 18px;background:linear-gradient(135deg,#f3dda5,#c99550);color:#241a15;font-weight:800;cursor:pointer;font-size:1rem}.btn.secondary{background:transparent;color:var(--ink)}.btn:disabled{opacity:.45;cursor:not-allowed}
+.note{border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--muted);margin-top:14px}.ok{border-color:#6fa57e;color:#c9f2d4;background:#6fa57e14}.bad{border-color:#c56f42;color:#ffd3c2;background:#c56f4214}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}.mini{background:#ffffff08;border:1px solid var(--line);border-radius:16px;padding:14px}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ffffff12}th{font-size:.82rem;color:#e8d9f0;text-transform:uppercase}
+a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}.brand{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div>
+      <span class="badge">MODE TEST — version stable intacte</span>
+      <h1>Fin de période</h1>
+      <p class="muted">Cette page teste uniquement la vérification avant clôture. Elle ne clôture rien.</p>
+    </div>
+    <a class="btn secondary" href="app-stable.html">Retour au site stable</a>
+  </div>
+  <div class="card">
+    <h2>Vérification préalable</h2>
+    <p>On contrôle la période active, les éventuels résultats encore non transférés et les totaux qui seront figés dans l’archive.</p>
+    <button id="check" class="btn">Vérifier avant clôture</button>
+    <div id="status" class="note">Aucune action effectuée.</div>
+    <div id="result"></div>
+  </div>
+</div>
+<script>
+const URL='https://dxbvklzpwjcebvkscnej.supabase.co';
+const KEY='sb_publishable_df2dl34QXUsD46jUMmX60A_AdvQQiJz';
+const session=()=>{try{return JSON.parse(localStorage.getItem('c4s_session')||'null')}catch{return null}};
+const headers=()=>{const s=session();return {'apikey':KEY,'Authorization':'Bearer '+(s&&s.access_token||'')}};
+async function rpc(name,body){
+  const r=await fetch(URL+'/rest/v1/rpc/'+name,{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const txt=await r.text();
+  if(!r.ok)throw new Error(txt);
+  return txt?JSON.parse(txt):null;
+}
+async function get(path){
+  const r=await fetch(URL+'/rest/v1/'+path,{headers:headers()});
+  const txt=await r.text();
+  if(!r.ok)throw new Error(txt);
+  return txt?JSON.parse(txt):[];
+}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const houseLabel=id=>({verdelis:'Verdelis',solor:'Solor',feuillanor:'Feuillanor',givrecime:'Givrecime'})[id]||id;
+const classLabel=id=>id==='ce2'?'CE2':id==='cm1-cm2'?'CM1-CM2':id;
+let verifiedPeriod=null;
+
+document.getElementById('check').onclick=async()=>{
+  const btn=document.getElementById('check'),st=document.getElementById('status'),out=document.getElementById('result');
+  btn.disabled=true;st.className='note';st.textContent='Vérification en cours…';out.innerHTML='';
+  try{
+    const s=session();
+    if(!s||!s.access_token)throw new Error('Aucune session trouvée. Ouvre d’abord la version stable et connecte-toi.');
+    const periods=await get('periods?archived=eq.false&order=name.asc');
+    const p=periods[0];
+    if(!p)throw new Error('Aucune période active.');
+    const others=periods.filter(x=>x.id!==p.id);
+    const next=others[0]||null;
+    const [results,items,classTotals,academyTotals]=await Promise.all([
+      get('weekly_results?period_id=eq.'+encodeURIComponent(p.id)+'&select=id,class_id,house_id,tokens_awarded'),
+      get('academy_transfer_items?select=weekly_result_id'),
+      get('class_token_totals?period_id=eq.'+encodeURIComponent(p.id)+'&select=class_id,house_id,tokens'),
+      get('academy_token_totals?period_id=eq.'+encodeURIComponent(p.id)+'&select=house_id,tokens')
+    ]);
+    const transferred=new Set(items.map(x=>x.weekly_result_id));
+    const pendingRows=results.filter(x=>!transferred.has(x.id));
+    const pending=pendingRows.length;
+    st.className='note '+(pending?'bad':'ok');
+    st.innerHTML=pending
+      ? '<b>Clôture à ne pas lancer :</b> '+pending+' résultat'+(pending>1?'s':'')+' reste'+(pending>1?'nt':'')+' à transférer.'
+      : '<b>Vérification réussie.</b> Aucun résultat n’est en attente de transfert.';
+    out.innerHTML=
+      '<div class="grid">'+
+        '<div class="mini"><h3>Période active</h3><p><b>Période '+esc(p.name)+'</b></p><p class="muted">Période suivante : '+(next?'Période '+esc(next.name):'aucune')+'</p></div>'+
+        '<div class="mini"><h3>État</h3><p><b>'+pending+'</b> résultat'+(pending>1?'s':'')+' non transféré'+(pending>1?'s':'')+'</p></div>'+
+      '</div>'+
+      '<div class="grid">'+
+        '<div class="mini"><h3>Totaux classes</h3><table><thead><tr><th>Classe</th><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
+          classTotals.map(r=>'<tr><td>'+classLabel(r.class_id)+'</td><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
+        '</tbody></table></div>'+
+        '<div class="mini"><h3>Totaux Académie</h3><table><thead><tr><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
+          academyTotals.map(r=>'<tr><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
+        '</tbody></table></div>'+
+      '</div>'+
+      (pending?'' : '<div class="note ok" style="margin-top:18px"><b>Tout est prêt pour la simulation.</b><br><span class="muted">On va simuler la clôture de la période '+esc(p.name)+' sans écrire dans Supabase.</span><br><button id="closePeriod" class="btn" style="margin-top:14px">Simuler la clôture de la période '+esc(p.name)+'</button></div>');
+    verifiedPeriod={id:p.id,name:p.name,nextName:next&&next.name};
+    const closeBtn=document.getElementById('closePeriod');
+    if(closeBtn)closeBtn.onclick=closePeriodNow;
+  }catch(e){
+    st.className='note bad';st.textContent='Vérification impossible : '+e.message;
+  }finally{btn.disabled=false}
+};
+
+async function closePeriodNow(){
+  if(!verifiedPeriod)return;
+  const phrase='SIMULER PÉRIODE '+verifiedPeriod.name;
+  const answer=prompt(
+    'SIMULATION UNIQUEMENT — aucune donnée réelle ne sera modifiée.\\n\\n'+
+    'Pour tester l’écran de fin de période, recopiez exactement :\\n'+phrase
+  );
+  if(answer!==phrase){alert('Simulation annulée.');return;}
+  const oldName=verifiedPeriod.name;
+  const nextName=verifiedPeriod.nextName||'suivante';
+  document.getElementById('status').className='note ok';
+  document.getElementById('status').innerHTML=
+    '<b>Simulation réussie.</b> Dans le vrai fonctionnement, la période '+esc(oldName)+
+    ' serait archivée et la période '+esc(nextName)+' deviendrait active.';
+  document.getElementById('result').innerHTML=
+    '<div class="note ok"><b>Aucune donnée n’a été modifiée.</b><br><br>'+
+    'La simulation confirme le scénario suivant :<br>'+
+    '• Période '+esc(oldName)+' → archivée<br>'+
+    '• Période '+esc(nextName)+' → activée<br>'+
+    '• conversions conservées<br>'+
+    '• transferts conservés<br>'+
+    '• totaux de fin de période figés dans les archives<br>'+
+    '• nouveaux totaux de période repartent de 0</div>'+
+    '<p style="margin-top:16px"><button id="redoTest" class="btn secondary">Revenir à la vérification</button> '+
+    '<a class="btn secondary" href="app-stable.html">Retour au site stable</a></p>';
+  const redo=document.getElementById('redoTest');
+  if(redo)redo.onclick=()=>location.reload();
+  verifiedPeriod=null;
+}
+</script>
+</body>
+</html>
