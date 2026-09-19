@@ -92,7 +92,7 @@ document.getElementById('check').onclick=async()=>{
           academyTotals.map(r=>'<tr><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
         '</tbody></table></div>'+
       '</div>'+
-      (pending?'' : '<div class="note ok" style="margin-top:18px"><b>Tout est prêt pour la clôture.</b><br><span class="muted">La clôture archivera la période '+esc(p.name)+' et activera la période '+(next?esc(next.name):'suivante')+'. Aucune donnée ne sera supprimée.</span><br><button id="closePeriod" class="btn" style="margin-top:14px">Clôturer la période '+esc(p.name)+'</button></div>');
+      (pending?'' : '<div class="note ok" style="margin-top:18px"><b>Tout est prêt pour la simulation.</b><br><span class="muted">On va simuler la clôture de la période '+esc(p.name)+' sans écrire dans Supabase.</span><br><button id="closePeriod" class="btn" style="margin-top:14px">Simuler la clôture de la période '+esc(p.name)+'</button></div>');
     verifiedPeriod={id:p.id,name:p.name,nextName:next&&next.name};
     const closeBtn=document.getElementById('closePeriod');
     if(closeBtn)closeBtn.onclick=closePeriodNow;
