@@ -25,7 +25,6 @@ a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}.bra
     </div>
     <a class="btn secondary" href="app-stable.html">Retour au site stable</a>
   </div>
-
   <div class="card">
     <h2>Vérification préalable</h2>
     <p>On contrôle la période active, les éventuels résultats encore non transférés et les totaux qui seront figés dans l’archive.</p>
@@ -34,49 +33,60 @@ a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}.bra
     <div id="result"></div>
   </div>
 </div>
-
 <script>
 const URL='https://dxbvklzpwjcebvkscnej.supabase.co';
 const KEY='sb_publishable_df2dl34QXUsD46jUMmX60A_AdvQQiJz';
 const session=()=>{try{return JSON.parse(localStorage.getItem('c4s_session')||'null')}catch{return null}};
-const headers=()=>{const s=session();return {'apikey':KEY,'Authorization':'Bearer '+(s&&s.access_token||''),'Content-Type':'application/json'}};
+const headers=()=>{const s=session();return {'apikey':KEY,'Authorization':'Bearer '+(s&&s.access_token||'')}};
+async function get(path){
+  const r=await fetch(URL+'/rest/v1/'+path,{headers:headers()});
+  const txt=await r.text();
+  if(!r.ok)throw new Error(txt);
+  return txt?JSON.parse(txt):[];
+}
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-async function getActivePeriod(){
-  const r=await fetch(URL+'/rest/v1/periods?archived=eq.false&order=name.asc&limit=1',{headers:headers()});
-  if(!r.ok)throw new Error(await r.text());
-  const j=await r.json(); return j[0]||null;
-}
-async function rpc(name,body){
-  const r=await fetch(URL+'/rest/v1/rpc/'+name,{method:'POST',headers:headers(),body:JSON.stringify(body)});
-  const txt=await r.text(); if(!r.ok)throw new Error(txt);
-  return txt?JSON.parse(txt):null;
-}
-function houseLabel(id){return ({verdelis:'Verdelis',solor:'Solor',feuillanor:'Feuillanor',givrecime:'Givrecime'})[id]||id}
-function classLabel(id){return id==='ce2'?'CE2':id==='cm1-cm2'?'CM1-CM2':id}
+const houseLabel=id=>({verdelis:'Verdelis',solor:'Solor',feuillanor:'Feuillanor',givrecime:'Givrecime'})[id]||id;
+const classLabel=id=>id==='ce2'?'CE2':id==='cm1-cm2'?'CM1-CM2':id;
+
 document.getElementById('check').onclick=async()=>{
   const btn=document.getElementById('check'),st=document.getElementById('status'),out=document.getElementById('result');
-  btn.disabled=true; st.className='note'; st.textContent='Vérification en cours…'; out.innerHTML='';
+  btn.disabled=true;st.className='note';st.textContent='Vérification en cours…';out.innerHTML='';
   try{
     const s=session();
     if(!s||!s.access_token)throw new Error('Aucune session trouvée. Ouvre d’abord la version stable et connecte-toi.');
-    const p=await getActivePeriod(); if(!p)throw new Error('Aucune période active.');
-    const data=await rpc('preview_period_close',{p_period_id:p.id});
-    const x=Array.isArray(data)?data[0]:data;
-    const pending=Number(x.pending_results||0);
+    const periods=await get('periods?archived=eq.false&order=name.asc');
+    const p=periods[0];
+    if(!p)throw new Error('Aucune période active.');
+    const others=periods.filter(x=>x.id!==p.id);
+    const next=others[0]||null;
+    const [results,items,classTotals,academyTotals]=await Promise.all([
+      get('weekly_results?period_id=eq.'+encodeURIComponent(p.id)+'&select=id,class_id,house_id,tokens_awarded'),
+      get('academy_transfer_items?select=weekly_result_id'),
+      get('class_token_totals?period_id=eq.'+encodeURIComponent(p.id)+'&select=class_id,house_id,tokens'),
+      get('academy_token_totals?period_id=eq.'+encodeURIComponent(p.id)+'&select=house_id,tokens')
+    ]);
+    const transferred=new Set(items.map(x=>x.weekly_result_id));
+    const pendingRows=results.filter(x=>!transferred.has(x.id));
+    const pending=pendingRows.length;
     st.className='note '+(pending?'bad':'ok');
     st.innerHTML=pending
       ? '<b>Clôture à ne pas lancer :</b> '+pending+' résultat'+(pending>1?'s':'')+' reste'+(pending>1?'nt':'')+' à transférer.'
       : '<b>Vérification réussie.</b> Aucun résultat n’est en attente de transfert.';
-    const ct=x.class_totals||[], at=x.academy_totals||[];
-    out.innerHTML='<div class="grid"><div class="mini"><h3>Période active</h3><p><b>Période '+esc(x.period_name)+'</b></p><p class="muted">Période suivante : '+(x.next_period_name?'Période '+esc(x.next_period_name):'aucune')+'</p></div>'+
-      '<div class="mini"><h3>État</h3><p><b>'+pending+'</b> résultat'+(pending>1?'s':'')+' non transféré'+(pending>1?'s':'')+'</p></div></div>'+
-      '<div class="grid"><div class="mini"><h3>Totaux classes</h3><table><thead><tr><th>Classe</th><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
-      ct.map(r=>'<tr><td>'+classLabel(r.class_id)+'</td><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
-      '</tbody></table></div><div class="mini"><h3>Totaux Académie</h3><table><thead><tr><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
-      at.map(r=>'<tr><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
-      '</tbody></table></div></div>';
+    out.innerHTML=
+      '<div class="grid">'+
+        '<div class="mini"><h3>Période active</h3><p><b>Période '+esc(p.name)+'</b></p><p class="muted">Période suivante : '+(next?'Période '+esc(next.name):'aucune')+'</p></div>'+
+        '<div class="mini"><h3>État</h3><p><b>'+pending+'</b> résultat'+(pending>1?'s':'')+' non transféré'+(pending>1?'s':'')+'</p></div>'+
+      '</div>'+
+      '<div class="grid">'+
+        '<div class="mini"><h3>Totaux classes</h3><table><thead><tr><th>Classe</th><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
+          classTotals.map(r=>'<tr><td>'+classLabel(r.class_id)+'</td><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
+        '</tbody></table></div>'+
+        '<div class="mini"><h3>Totaux Académie</h3><table><thead><tr><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
+          academyTotals.map(r=>'<tr><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
+        '</tbody></table></div>'+
+      '</div>';
   }catch(e){
-    st.className='note bad'; st.textContent='Vérification impossible : '+e.message;
+    st.className='note bad';st.textContent='Vérification impossible : '+e.message;
   }finally{btn.disabled=false}
 };
 </script>
