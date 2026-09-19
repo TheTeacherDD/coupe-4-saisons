@@ -38,6 +38,12 @@ const URL='https://dxbvklzpwjcebvkscnej.supabase.co';
 const KEY='sb_publishable_df2dl34QXUsD46jUMmX60A_AdvQQiJz';
 const session=()=>{try{return JSON.parse(localStorage.getItem('c4s_session')||'null')}catch{return null}};
 const headers=()=>{const s=session();return {'apikey':KEY,'Authorization':'Bearer '+(s&&s.access_token||'')}};
+async function rpc(name,body){
+  const r=await fetch(URL+'/rest/v1/rpc/'+name,{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const txt=await r.text();
+  if(!r.ok)throw new Error(txt);
+  return txt?JSON.parse(txt):null;
+}
 async function get(path){
   const r=await fetch(URL+'/rest/v1/'+path,{headers:headers()});
   const txt=await r.text();
@@ -47,6 +53,7 @@ async function get(path){
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const houseLabel=id=>({verdelis:'Verdelis',solor:'Solor',feuillanor:'Feuillanor',givrecime:'Givrecime'})[id]||id;
 const classLabel=id=>id==='ce2'?'CE2':id==='cm1-cm2'?'CM1-CM2':id;
+let verifiedPeriod=null;
 
 document.getElementById('check').onclick=async()=>{
   const btn=document.getElementById('check'),st=document.getElementById('status'),out=document.getElementById('result');
@@ -84,11 +91,35 @@ document.getElementById('check').onclick=async()=>{
         '<div class="mini"><h3>Totaux Académie</h3><table><thead><tr><th>Maison</th><th>Jetons</th></tr></thead><tbody>'+
           academyTotals.map(r=>'<tr><td>'+houseLabel(r.house_id)+'</td><td><b>'+r.tokens+'</b></td></tr>').join('')+
         '</tbody></table></div>'+
-      '</div>';
+      '</div>'+
+      (pending?'' : '<div class="note ok" style="margin-top:18px"><b>Tout est prêt pour la clôture.</b><br><span class="muted">La clôture archivera la période '+esc(p.name)+' et activera la période '+(next?esc(next.name):'suivante')+'. Aucune donnée ne sera supprimée.</span><br><button id="closePeriod" class="btn" style="margin-top:14px">Clôturer la période '+esc(p.name)+'</button></div>');
+    verifiedPeriod={id:p.id,name:p.name,nextName:next&&next.name};
+    const closeBtn=document.getElementById('closePeriod');
+    if(closeBtn)closeBtn.onclick=closePeriodNow;
   }catch(e){
     st.className='note bad';st.textContent='Vérification impossible : '+e.message;
   }finally{btn.disabled=false}
 };
+
+async function closePeriodNow(){
+  if(!verifiedPeriod)return;
+  const phrase='CLÔTURER PÉRIODE '+verifiedPeriod.name;
+  const answer=prompt('Cette action archive réellement la période '+verifiedPeriod.name+' et active la suivante.\\n\\nAucune donnée ne sera supprimée.\\n\\nPour confirmer, recopiez exactement :\\n'+phrase);
+  if(answer!==phrase){alert('Clôture annulée.');return;}
+  const closeBtn=document.getElementById('closePeriod');
+  if(closeBtn)closeBtn.disabled=true;
+  try{
+    const data=await rpc('close_period',{p_period_id:verifiedPeriod.id});
+    const x=Array.isArray(data)?data[0]:data;
+    document.getElementById('status').className='note ok';
+    document.getElementById('status').innerHTML='<b>Période clôturée avec succès.</b> La période '+esc(x&&x.next_period_name||verifiedPeriod.nextName||'suivante')+' est maintenant active.';
+    document.getElementById('result').innerHTML='<div class="note ok"><b>Test réussi.</b><br>La période '+esc(verifiedPeriod.name)+' a été archivée. Les conversions, transferts et totaux restent conservés dans la base.</div><p style="margin-top:16px"><a class="btn secondary" href="app-stable.html">Retour au site stable</a></p>';
+    verifiedPeriod=null;
+  }catch(e){
+    if(closeBtn)closeBtn.disabled=false;
+    alert('Clôture impossible : '+e.message);
+  }
+}
 </script>
 </body>
 </html>
